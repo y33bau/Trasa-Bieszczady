@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<title>Wetlińska i Smerek</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: karta górska — nagłówek jak drogowskaz, schematyczna mapa, oś czasu tam/z powrotem, zasady na dole */
+:root{
+  --bg:#F2F3EE; --surface:#FFFFFF; --fg:#1C231F; --muted:#5F6963; --line:#D5D9D0;
+  --forest:#2E5A44; --red:#C2342C; --yellow:#D9A514; --sign:#FFFFFF;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111613; --surface:#1A201C; --fg:#E5E9E3; --muted:#9AA49D; --line:#2E3631;
+  --forest:#7DB596; --red:#E5574E; --yellow:#E9BE3C; --sign:#F4F4F0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111613; --surface:#1A201C; --fg:#E5E9E3; --muted:#9AA49D; --line:#2E3631;
+  --forest:#7DB596; --red:#E5574E; --yellow:#E9BE3C; --sign:#F4F4F0; color-scheme:dark}
+
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55}
+.wrap{max-width:860px;margin:0 auto;padding-block:28px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;letter-spacing:.01em;text-wrap:balance;margin:0;line-height:1.05}
+h1{font-size:clamp(2.1rem,7vw,3.2rem);text-transform:uppercase}
+h2{font-size:1.55rem;text-transform:uppercase}
+h3{font-size:1.15rem;font-weight:600}
+p{margin:0}
+.eyebrow{font-family:var(--font-display);font-weight:600;text-transform:uppercase;letter-spacing:.12em;font-size:.9rem;color:var(--forest)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* znak szlaku PTTK: biały–kolor–biały */
+.mark{display:inline-flex;flex-direction:column;width:22px;height:15px;border:1px solid var(--line);border-radius:2px;overflow:hidden;vertical-align:-2px;flex:none}
+.mark i{flex:1;background:var(--sign)}
+.mark i:nth-child(2){background:var(--c)}
+.mark.y{--c:var(--yellow)} .mark.r{--c:var(--red)}
+
+header{display:flex;flex-direction:column;gap:12px}
+.facts{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.95rem}
+.facts b{font-family:var(--font-mono);font-weight:500}
+
+.mapbox{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#map{height:min(70vh,520px);min-height:340px;border-radius:4px;background:#2b3a30}
+.pin{width:28px;height:28px;border-radius:50%;background:#1C231F;color:#fff;border:3px solid #fff;display:grid;place-items:center;font-family:var(--font-display);font-weight:700;font-size:15px;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.pin.ctrl{background:#C2342C}
+.leaflet-tooltip.lbl{background:rgba(20,26,22,.82);color:#fff;border:0;box-shadow:none;font-family:var(--font-display);font-weight:600;font-size:14px;padding:1px 6px}
+.leaflet-tooltip.lbl::before{display:none}
+.leaflet-popup-content{font-family:var(--font-body);font-size:13px;line-height:1.45}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.85rem;color:var(--muted);align-items:center}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+
+.leg{display:flex;flex-direction:column;gap:10px}
+.leg-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:2px solid var(--fg);padding-bottom:6px}
+ol.tl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+ol.tl li{display:grid;grid-template-columns:62px 28px minmax(0,1fr);gap:0 10px;padding:12px 0;border-bottom:1px solid var(--line);align-items:start}
+.time{font-family:var(--font-mono);font-size:1.05rem;font-variant-numeric:tabular-nums;padding-top:1px}
+.num{width:24px;height:24px;border-radius:50%;background:var(--fg);color:var(--bg);font-family:var(--font-display);font-weight:700;display:grid;place-items:center;font-size:.95rem}
+.num.ctrl{background:var(--red);color:#fff}
+.poi{min-width:0;display:flex;flex-direction:column;gap:3px}
+.poi .meta{font-family:var(--font-mono);font-size:.8rem;color:var(--muted)}
+.poi a{color:var(--forest);font-size:.85rem;text-underline-offset:2px}
+.poi a:focus-visible{outline:2px solid var(--forest);outline-offset:2px}
+.flag{display:inline-block;font-family:var(--font-display);font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:.78rem;padding:1px 7px;border-radius:3px;background:var(--red);color:#fff;margin-right:6px}
+
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.rule{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.rule.alert{border-color:var(--red)}
+.rule.alert h3{color:var(--red)}
+footer{font-size:.82rem;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+@media (max-width:420px){ol.tl li{grid-template-columns:52px 26px minmax(0,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Bieszczady · sobota 24 października 2026</p>
+    <h1>Połonina Wetlińska i Smerek</h1>
+    <p class="muted">Z Przełęczy Wyżnej na Smerek i z powrotem tą samą drogą. Start 8:00, powrót do auta ok. 14:25.</p>
+    <div class="facts">
+      <span>Dystans <b>ok. 18,5 km</b></span>
+      <span>Marsz <b>ok. 6 h</b> (z przerwami 6,5 h)</span>
+      <span>Najwyżej <b>1253 m</b> · Osadzki Wierch</span>
+      <span>Zachód słońca <b>ok. 17:20</b></span>
+    </div>
+  </header>
+
+  <section class="mapbox" aria-label="Mapa topograficzna trasy">
+    <div id="map"></div>
+    <div class="legend">
+      <span><i class="mark y"><i></i><i></i><i></i></i> szlak żółty</span>
+      <span><i class="mark r"><i></i><i></i><i></i></i> szlak czerwony</span>
+      <span>Punkty są w dokładnych miejscach, ale linia łączy je prostymi odcinkami i nie pokazuje przebiegu ścieżki w terenie. Przełącznik warstw w prawym górnym rogu mapy.</span>
+    </div>
+  </section>
+
+  <section class="leg">
+    <div class="leg-head"><h2>Tam: na Smerek</h2><span class="mono muted">8:00 → 11:30</span></div>
+    <ol class="tl" id="tl-up"></ol>
+  </section>
+
+  <section class="leg">
+    <div class="leg-head"><h2>Z powrotem: do auta</h2><span class="mono muted">11:45 → 14:25</span></div>
+    <ol class="tl" id="tl-down"></ol>
+  </section>
+
+  <section class="leg">
+    <div class="leg-head"><h2>Zanim wyjdziecie</h2></div>
+    <div class="rules">
+      <div class="rule alert"><h3>Godzina kontrolna 11:30</h3><p>Jeśli na Przełęczy Orłowicza jesteście później, odpuśćcie Smerek i wracajcie. Sama przełęcz też daje świetne widoki.</p></div>
+      <div class="rule"><h3>Zejście awaryjne</h3><p>Z Przełęczy Orłowicza żółtym szlakiem do Wetliny, ok. 1 h 15 min. Auto zostaje wtedy na Przełęczy Wyżnej, ok. 7 km drogą.</p></div>
+      <div class="rule"><h3>Dojazd i parking</h3><p>Wyjazd z Bukowca ok. 6:30 (jeszcze przed świtem), ok. 1 h przez Baligród, Cisnę i Wetlinę. Płatny parking na Przełęczy Wyżnej (orientacyjnie 30–40 zł), kasa BdPN na miejscu, ale o 8:00 może być jeszcze zamknięta, więc bilety kup wcześniej online. Nie myl z Przełęczą Wyżniańską kilka km dalej.</p></div>
+      <div class="rule"><h3>Pogoda i sprzęt</h3><p>Sucho, w dolinach do ok. 10°C, na grzbiecie chłodniej i wietrznie. Po czwartkowym deszczu ślisko w lesie. Kurtka przeciwwiatrowa, czapka, rękawiczki, kijki, czołówka.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Czasy przejść do Smereka wg mapa-turystyczna.pl, powrót szacowany. Pozycja rozwidlenia ze szlakiem zielonym jest przybliżona.</p>
+    <p>Sprawdź komunikat Bieszczadzkiego Parku Narodowego (bdpn.gov.pl) w piątek wieczorem.</p>
+  </footer>
+</div>
+
+<script>
+const P = [
+  {id:1, name:"Przełęcz Wyżna", sub:"parking, kasa BdPN, start", lat:49.14155, lon:22.54808, lx:12, ly:4, anchor:"start"},
+  {id:2, name:"Końska Droga", sub:"skrzyżowanie z zielonym", lat:49.15068, lon:22.55162, lx:12, ly:4, anchor:"start"},
+  {id:3, name:"Chatka Puchatka", sub:"schron, bufet", lat:49.15806, lon:22.55121, lx:12, ly:4, anchor:"start"},
+  {id:4, name:"Rozwidlenie", sub:"zielony w dół", lat:49.16200, lon:22.54000, lx:0, ly:24, anchor:"middle"},
+  {id:5, name:"Osadzki Wierch", sub:"1253 m", lat:49.16585, lon:22.52399, lx:0, ly:24, anchor:"middle"},
+  {id:6, name:"Przełęcz Orłowicza", sub:"żółty do Wetliny", lat:49.18074, lon:22.49188, lx:-16, ly:4, anchor:"end"},
+  {id:7, name:"Smerek", sub:"1222 m, zawrót", lat:49.18560, lon:22.47840, lx:12, ly:-8, anchor:"start"}
+];
+const gm = p => `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;
+
+const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:18, attribution:'Zdjęcia satelitarne &copy; Esri, Maxar, Earthstar Geographics'});
+const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+  {maxZoom:17, attribution:'&copy; OpenStreetMap, SRTM | styl &copy; OpenTopoMap (CC-BY-SA)'});
+const map = L.map('map', {layers:[topo], scrollWheelZoom:false});
+L.control.layers({'Mapa topograficzna':topo, 'Satelita':sat}).addTo(map);
+L.control.scale({imperial:false}).addTo(map);
+const ll = p => [p.lat, p.lon];
+L.polyline(P.slice(0,3).map(ll), {color:'#000', weight:9, opacity:.35}).addTo(map);
+L.polyline(P.slice(2).map(ll), {color:'#000', weight:9, opacity:.35}).addTo(map);
+L.polyline(P.slice(0,3).map(ll), {color:'#F2C230', weight:5}).addTo(map);
+L.polyline(P.slice(2).map(ll), {color:'#E0382F', weight:5}).addTo(map);
+const timesUp = ["8:00","8:30","9:15","9:40","10:05","11:00","11:30"];
+const timesDown = ["14:25","14:10","13:40",null,"13:05","12:05",null];
+P.forEach((p,i)=>{
+  const ctrl = p.id===6;
+  const icon = L.divIcon({className:'', iconSize:[28,28], iconAnchor:[14,14],
+    html:`<div class="pin${ctrl?' ctrl':''}">${p.id}</div>`});
+  const back = timesDown[i] ? `<br>z powrotem: <b>${timesDown[i]}</b>` : '';
+  L.marker(ll(p), {icon}).addTo(map).bindPopup(
+    `<strong>${p.id}. ${p.name}</strong><br><span>${p.sub}</span><br>tam: <b>${timesUp[i]}</b>${back}`);
+  L.tooltip({permanent:true, direction:'right', offset:[14,0], className:'lbl'})
+    .setContent(p.name).setLatLng(ll(p)).addTo(map);
+});
+map.fitBounds(L.latLngBounds(P.map(ll)), {padding:[30,30]});
+
+const mk = c => `<i class="mark ${c}"><i></i><i></i><i></i></i>`;
+const up = [
+  {t:"8:00", p:0, title:"Przełęcz Wyżna", meta:"0:00 · 0 km", txt:`Parking i kasa BdPN. Start ${mk('y')} żółtym szlakiem z parkingu, przez las bukowy.`},
+  {t:"8:30", p:1, title:"Końska Droga", meta:"0:30 · 1,1 km", txt:`Skrzyżowanie z zielonym. Dalej ${mk('y')} żółtym w górę, przed Tobą najbardziej strome i kamieniste podejście.`},
+  {t:"9:15", p:2, title:"Chatka Puchatka i Hasiakowa Skała", meta:"1:15 · 2,5 km · 1219 m", txt:`Schron BdPN z bufetem, jedyne zadaszenie na trasie. Krótka przerwa, potem w lewo na ${mk('r')} czerwony, grzbietem na zachód.`},
+  {t:"9:40", p:3, title:"Rozwidlenie ze szlakiem zielonym", meta:"ok. 1:30 · 3,6 km", txt:`Zielony schodzi w dół, Ty idziesz prosto ${mk('r')} czerwonym.`},
+  {t:"10:05", p:4, title:"Osadzki Wierch", meta:"ok. 1:55 · ok. 4,7 km · 1253 m", txt:"Najwyższy punkt trasy, skaliste wierzchołki."},
+  {t:"11:00", p:5, title:"Przełęcz Orłowicza", meta:"ok. 2:50 · ok. 8 km", ctrl:true, txt:`Drogowskaz: ${mk('y')} żółty w dół do Wetliny, ${mk('r')} czerwony prosto na Smerek. Bardzo wietrznie.`},
+  {t:"11:30", p:6, title:"Smerek", meta:"ok. 3:20 · ok. 9,2 km · 1222 m", txt:"Niższy wierzchołek (wyższy jest zamknięty). Panorama na Wetlińską i Caryńską. Przerwa ok. 15 min."}
+];
+const down = [
+  {t:"12:05", p:5, title:"Przełęcz Orłowicza", meta:"ok. 20 min ze Smereka", txt:`Dalej ${mk('r')} czerwonym na wschód.`},
+  {t:"13:05", p:4, title:"Osadzki Wierch", meta:"ok. 1 h od przełęczy", txt:"Przeważnie lekko pod górę."},
+  {t:"13:40", p:2, title:"Chatka Puchatka", meta:"ok. 35–40 min", txt:`Ciepła herbata, potem w prawo na ${mk('y')} żółty, w dół.`},
+  {t:"14:10", p:1, title:"Końska Droga", meta:"ok. 20 min", txt:`Nie skręcaj w zielony, dalej ${mk('y')} żółtym.`},
+  {t:"14:25", p:0, title:"Przełęcz Wyżna", meta:"ok. 15 min", txt:"Koniec trasy, ok. 3 h przed zachodem słońca."}
+];
+const row = r => {
+  const p = P[r.p];
+  return `<li><span class="time">${r.t}</span><span class="num${r.ctrl?' ctrl':''}">${p.id}</span>
+  <div class="poi"><h3>${r.ctrl?'<span class="flag">kontrola 11:30</span>':''}${r.title}</h3>
+  <span class="meta">${r.meta}</span><p>${r.txt}</p>
+  <a href="${gm(p)}" target="_blank" rel="noopener">Pokaż w Google Maps</a></div></li>`;
+};
+document.getElementById('tl-up').innerHTML = up.map(row).join('');
+document.getElementById('tl-down').innerHTML = down.map(row).join('');
+</script>
+
+</body>
+</html>
